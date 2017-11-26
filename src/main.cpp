@@ -19,20 +19,21 @@ extern "C" {
  * TODO:
  * 1. Two modes, fake & flood
  * 2. syslog
- *
+ * 3. getopt
  */
 
 struct MAC_Addr
 {
     std::array<std::uint8_t, 6> val;
 
-    MAC_Addr()
+    MAC_Addr() : val()
     {
         std::memset(val.data(), 0, 6);
     }
 
     MAC_Addr(std::uint8_t b0, std::uint8_t b1, std::uint8_t b2,
-             std::uint8_t b3, std::uint8_t b4, std::uint8_t b5)
+             std::uint8_t b3, std::uint8_t b4, std::uint8_t b5) :
+        val()
     {
         val[0] = b0;
         val[1] = b1;
@@ -43,7 +44,8 @@ struct MAC_Addr
     }
 
     MAC_Addr(std::uint8_t OUI[3],
-             std::uint8_t b3, std::uint8_t b4, std::uint8_t b5)
+    std::uint8_t b3, std::uint8_t b4, std::uint8_t b5) :
+        val()
     {
         val[0] = OUI[0];
         val[1] = OUI[1];
@@ -77,7 +79,7 @@ int send_packet(struct wif* wi_out, void *buf, size_t count)
     return 0;
 }
 
-int send_probe_packets(wif *wi_out, MAC_Addr mac, int &sequence, int channel)
+int send_probe_packet(wif *wi_out, MAC_Addr mac, int &sequence, int channel)
 {
     // Frame skeleton
     int len = WLAN_PROBE_FRAME_SIZE;
@@ -102,9 +104,9 @@ int send_probe_packets(wif *wi_out, MAC_Addr mac, int &sequence, int channel)
     std::memcpy(frame_body + len, WLAN_SUPPORTED_RATES, WLAN_SUPPORTED_RATES_SIZE);
     len += WLAN_SUPPORTED_RATES_SIZE;
 
-    printf("sending %02X:%02X:%02X:%02X:%02X:%02X on channel %d, sent %d times\n",
-           mac.val[0], mac.val[1], mac.val[2], mac.val[3], mac.val[4], mac.val[5],
-           channel, sequence);
+//    printf("probing as %02X:%02X:%02X:%02X:%02X:%02X @C%d, sent %d times\n",
+//           mac.val[0], mac.val[1], mac.val[2], mac.val[3], mac.val[4], mac.val[5],
+//            channel, sequence);
 
     if (send_packet(wi_out, frame_body, len) == 0) {
         sequence++;
@@ -148,18 +150,22 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    std::vector<MAC_Addr> macs = generate_random_MACs(60, 100);
+    std::vector<MAC_Addr> macs = generate_random_MACs(100, 10000);
     std::vector<int> seqs(macs.size());
     // randomize seqs
 
-    std::printf("%d macs in total\n", macs.size());
+    std::printf("%lu macs in total\n", macs.size());
 
-    int channel = 1;
+    for (int repeat = 0; repeat < 2; ++repeat) {
+        for (unsigned int j = 0; j < macs.size(); ++j) {
+            auto mac = macs[j];
+            std::printf("probing as %02X:%02X:%02X:%02X:%02X:%02X on 12 channels\n",
+                        mac.val[0], mac.val[1], mac.val[2], mac.val[3], mac.val[4], mac.val[5]);
 
-    for (int i = 0; i < 2; ++i) {
-        for (int j = 0; j < macs.size(); ++j) {
-            send_probe_packets(wi_out, macs[j], seqs[j], channel);
-            usleep(100000);
+            for (int channel = 1; channel <= 11; ++channel) {
+                send_probe_packet(wi_out, macs[j], seqs[j], channel);
+//                usleep(500);
+            }
         }
     }
 
